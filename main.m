@@ -2,7 +2,7 @@ clc; clearvars; close all;
 fprintf('start\n')
 
 % solver settings
-max_iter = 10000;
+max_iter = 1;
 CFL = 0.5;
 N_i = 10; % number of nodes in R direction
 N_j = 10; % number of nodes in Phi direction
@@ -231,6 +231,19 @@ end
 fprintf('completed\n')
 
 figure
+n_plot = 100;
+phi_plot = linspace(Phi_start, Phi_end, n_plot);
+x_plot = zeros(2*n_plot+1,1);
+x_plot(1:n_plot) = R_i * cos(phi_plot);
+x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+x_plot(2*n_plot+1) = x_plot(1);
+y_plot = zeros(2*n_plot+1,1);
+y_plot(1:n_plot) = R_i * sin(phi_plot);
+y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+y_plot(2*n_plot+1) = y_plot(1);
+plot(x_plot, y_plot, 'k');
+
+hold on;
 X = R_coord .* cos(Phi_coord);
 Y = R_coord .* sin(Phi_coord);
 u_x = u_n .* cos(Phi_coord);
@@ -241,5 +254,20 @@ quiver(X, Y, u_x + v_x, u_y + v_y);
 axis equal;
 
 figure
-contourf(X,Y,T_n,100,'LineColor','none')
+contourf(X,Y,T_n,100,'LineColor','none');
+colorbar;
+colormap('jet');
+
+hold on;
+n_plot = 100;
+phi_plot = linspace(Phi_start, Phi_end, n_plot);
+x_plot = zeros(2*n_plot+1,1);
+x_plot(1:n_plot) = R_i * cos(phi_plot);
+x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+x_plot(2*n_plot+1) = x_plot(1);
+y_plot = zeros(2*n_plot+1,1);
+y_plot(1:n_plot) = R_i * sin(phi_plot);
+y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+y_plot(2*n_plot+1) = y_plot(1);
+plot(x_plot, y_plot, 'k');
 axis equal;
