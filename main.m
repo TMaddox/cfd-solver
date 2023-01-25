@@ -2,9 +2,10 @@ clc; clearvars; close all;
 fprintf('start\n')
 
 % solver settings
-max_iter = 10;
-N_i = 5; % number of nodes in R direction
-N_j = 20; % number of nodes in Phi direction
+max_iter = 10000;
+CFL = 0.5;
+N_i = 10; % number of nodes in R direction
+N_j = 10; % number of nodes in Phi direction
 GS_max_iter = 100;
 GS_tol = 1e-8;
 
@@ -36,7 +37,7 @@ ru = linspace(R_i, R_a + dr, i_max);
 dphi = (Phi_end - Phi_start) / N_j;
 phip = linspace(Phi_start - dphi/2, Phi_end + dphi/2, j_max);
 phiv = linspace(Phi_start, Phi_end + dphi, j_max);
-[R_coord, Phi_coord] = meshgrid(linspace(R_i, R_a, i_max), linspace(Phi_start, Phi_end, j_max));
+[R_coord, Phi_coord] = meshgrid(linspace(R_i-dr/2, R_a+dr/2, i_max), linspace(Phi_start-dphi/2, Phi_end+dphi/2, j_max));
 R_coord = transpose(R_coord);
 Phi_coord = transpose(Phi_coord);
 
@@ -84,30 +85,8 @@ for i = 2:i_max-1
 end
 
 % %%%%%%%% ITERATIVE SOLVING %%%%%%%%
-t_total = 0;
-dt = 1e-4;
+dt = 0;
 for itr = 1:max_iter
-    % %%%%%%%% BOUNDARIES %%%%%%%%
-    % Boundary 1 - adiabat left
-    u_n(:, 1) = - u_n(:, 2); % wall
-    v_n(:, 1) = 0; % wall
-    T_n(:, 1) = T_n(:, 2); % adiabat
-
-    % Boundary 2 - inner radius
-    u_n(1, :) = 0; % wall
-    v_n(1, :) = 2 * v_wall - v_n(2, :); % wall
-    T_n(1, :) = 2 * T_c - T_n(2, :); % wall with temperature
-
-    % Boundary 3 - adiabat right
-    u_n(:, j_max) = - u_n(:, j_max - 1); % wall
-    v_n(:, j_max) = 0; % wall
-    T_n(:, j_max) = T_n(:, j_max - 1); % adiabat
-
-    % Boundary 4 - outer radius
-    u_n(i_max, :) = 0; % wall
-    v_n(i_max, :) = - v_n(i_max - 1, :); % wall
-    T_n(i_max, :) = 2 * T_h - T_n(i_max - 1, :); % wall with temperature
-
     % %%%%%%%% PROJECTION %%%%%%%%
     for i = 2:i_max-1
         for j = 2:j_max-1
@@ -146,6 +125,7 @@ for itr = 1:max_iter
             Fj_n(i,j) = - j_t1 - j_t2 - j_t3 - j_t4 + j_t5 + j_t6;
 
             % projection
+            dt = 1e-4; %CFL/(u_n(i,j)/dr + v_n(i,j)/dphi);
             u_star(i,j) = dt/(dr*dphi*ru(i)) * (3/2 * Fi_n(i,j) - 1/2 * Fi_nm1(i,j)) + u_n(i,j);
             v_star(i,j) = dt/(dr*dphi*ru(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
         end
@@ -226,14 +206,40 @@ for itr = 1:max_iter
     p_n = p_np1;
     T_n = T_np1;
 
-    % store how much time passed
-    t_total = t_total + dt;
+    % %%%%%%%% BOUNDARIES %%%%%%%%
+    % Boundary 1 - adiabat left
+    u_n(:, 1) = - u_n(:, 2); % wall
+    v_n(:, 1) = 0; % wall
+    T_n(:, 1) = T_n(:, 2); % adiabat
+
+    % Boundary 2 - inner radius
+    u_n(1, :) = 0; % wall
+    v_n(1, :) = 2 * v_wall - v_n(2, :); % wall
+    T_n(1, :) = 2 * T_c - T_n(2, :); % wall with temperature
+
+    % Boundary 3 - adiabat right
+    u_n(:, j_max) = - u_n(:, j_max - 1); % wall
+    v_n(:, j_max) = 0; % wall
+    T_n(:, j_max) = T_n(:, j_max - 1); % adiabat
+
+    % Boundary 4 - outer radius
+    u_n(i_max, :) = 0; % wall
+    v_n(i_max, :) = - v_n(i_max - 1, :); % wall
+    T_n(i_max, :) = 2 * T_h - T_n(i_max - 1, :); % wall with temperature
 end
 
 fprintf('completed\n')
-figure
-heatmap(T_n, 'Colormap', jet)
+
 figure
 X = R_coord .* cos(Phi_coord);
 Y = R_coord .* sin(Phi_coord);
-quiver(X, Y, u_np1, v_np1)
+u_x = u_n .* cos(Phi_coord);
+u_y = u_n .* sin(Phi_coord);
+v_x = -v_n .* sin(Phi_coord);
+v_y = v_n .* cos(Phi_coord);
+quiver(X, Y, u_x + v_x, u_y + v_y);
+axis equal;
+
+figure
+contourf(X,Y,T_n,100,'LineColor','none')
+axis equal;
