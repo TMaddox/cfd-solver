@@ -19,6 +19,7 @@ Phi_start = pi;
 Phi_end = 2*pi;
 Re = 60;
 Pr = 4;
+nu = U0 * R / Re;
 
 % add ghost cells
 i_max = N_i + 2;
@@ -87,6 +88,13 @@ end
 % %%%%%%%% ITERATIVE SOLVING %%%%%%%%
 dt = 0;
 for itr = 1:max_iter
+    % calculate dt per cell
+    for i = 2:i_max-1
+        for j = 2:j_max-1
+            dt(i,j) = CFL/(abs(u_n(i,j))/dr + abs(v_n(i,j))/(dphi*rp(i)) + 2*nu/dr^2 + 2*nu/(dphi*rp(i))^2);
+        end
+    end
+
     % %%%%%%%% PROJECTION %%%%%%%%
     for i = 2:i_max-1
         for j = 2:j_max-1
@@ -125,9 +133,8 @@ for itr = 1:max_iter
             Fj_n(i,j) = - j_t1 - j_t2 - j_t3 - j_t4 + j_t5 + j_t6;
 
             % projection
-            dt = 1e-4; %CFL/(u_n(i,j)/dr + v_n(i,j)/dphi);
-            u_star(i,j) = dt/(dr*dphi*ru(i)) * (3/2 * Fi_n(i,j) - 1/2 * Fi_nm1(i,j)) + u_n(i,j);
-            v_star(i,j) = dt/(dr*dphi*ru(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
+            u_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fi_n(i,j) - 1/2 * Fi_nm1(i,j)) + u_n(i,j);
+            v_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
         end
     end
 
@@ -137,8 +144,8 @@ for itr = 1:max_iter
     for i = 2:i_max-1
         for j = 2:j_max-1
             idx = j + (i-1) * j_max;
-            b(idx) = (ru(i) * u_star(i,j) - ru(i-1) * u_star(i-1,j)) * dphi ...
-                + (v_star(i,j) - v_star(i,j-1)) * dr;
+            b(idx) = ((ru(i) * u_star(i,j) - ru(i-1) * u_star(i-1,j)) * dphi ...
+                + (v_star(i,j) - v_star(i,j-1)) * dr) / dt(i,j);
         end
     end
 
@@ -154,7 +161,7 @@ for itr = 1:max_iter
                 end
             end
             x(idx) = (b(idx) - sum)/A(idx,idx);
-            err = max(err,abs(x(idx) - p_corr_tmp(idx)));
+            err = max(err, abs(x(idx) - p_corr_tmp(idx)));
         end
 
         if err <= GS_tol
@@ -182,11 +189,12 @@ for itr = 1:max_iter
                 + dr/rp(i) * ((T_n(i,j+1) - T_n(i,j))/dphi - (T_n(i,j) - T_n(i,j-1))/dphi));
             Fe_n(i,j) = - e_t1 - e_t2 + e_t3;
 
-            T_np1(i,j) = dt/(dr*dphi*ru(i)) * (3/2 * Fe_n(i,j) - 1/2 * Fe_nm1(i,j)) + T_n(i,j);
+            T_np1(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fe_n(i,j) - 1/2 * Fe_nm1(i,j)) + T_n(i,j);
 
             % correction
-            u_np1(i,j) = u_star(i,j) - dt/dr * (p_corr(i+1,j) - p_corr(i,j));
-            v_np1(i,j) = v_star(i,j) - dt/dphi * (p_corr(i,j+1) - p_corr(i,j));
+            u_np1(i,j) = u_star(i,j) - dt(i,j)/dr * (p_corr(i+1,j) - p_corr(i,j));
+            v_np1(i,j) = v_star(i,j) - dt(i,j)/dphi * (p_corr(i,j+1) - p_corr(i,j));
+            p_np1(i,j) = p_n(i,j) + p_corr(i,j);
         end
     end
 
