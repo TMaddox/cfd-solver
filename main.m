@@ -2,14 +2,15 @@ clc; clearvars; close all;
 fprintf('start\n')
 
 % solver settings
-max_iter = 1;
-CFL = 0.5;
+max_iter = 100;
+CFL = 0.8;
 N_i = 10; % number of nodes in R direction
 N_j = 10; % number of nodes in Phi direction
 GS_max_iter = 100;
-GS_tol = 1e-8;
+GS_tol = 1e-6;
 
 % settings
+U0 = 10;
 T_h_absolut = 400;
 T_c_absolut = 300;
 R = 1;
@@ -43,6 +44,8 @@ R_coord = transpose(R_coord);
 Phi_coord = transpose(Phi_coord);
 
 % define variables
+dt = zeros(i_max, j_max);
+
 % n + 1 timestep
 u_np1 = zeros(i_max, j_max);
 v_np1 = zeros(i_max, j_max);
@@ -50,8 +53,8 @@ p_np1 = zeros(i_max, j_max);
 T_np1 = zeros(i_max, j_max);
 
 % current timestep
-u_n = ones(i_max, j_max);
-v_n = ones(i_max, j_max);
+u_n = zeros(i_max, j_max);
+v_n = zeros(i_max, j_max);
 p_n = ones(i_max, j_max);
 T_n = ones(i_max, j_max);
 Fi_n = zeros(i_max, j_max);
@@ -59,8 +62,8 @@ Fj_n = zeros(i_max, j_max);
 Fe_n = zeros(i_max, j_max);
 
 % n - 1 timestep
-u_nm1 = ones(i_max, j_max);
-v_nm1 = ones(i_max, j_max);
+u_nm1 = zeros(i_max, j_max);
+v_nm1 = zeros(i_max, j_max);
 p_nm1 = ones(i_max, j_max);
 T_nm1 = ones(i_max, j_max);
 Fi_nm1 = zeros(i_max, j_max);
@@ -85,8 +88,29 @@ for i = 2:i_max-1
     end
 end
 
+% pressure boundaries in A matrix
+for i = 2:i_max-1
+    for j = 1:j_max
+        idx = j + (i-1) * j_max;
+        if j == 1 % no pressure gradient - B1
+            A(idx, idx+1) = -1;
+        elseif j == j_max % no pressure gradient - B3
+            A(idx, idx-1) = -1;
+        end
+    end
+end
+for i = 1:i_max
+    for j = 2:j_max-1
+        idx = j + (i-1) * j_max;
+        if i == 1 % no pressure gradient - B2
+            A(idx, idx+j_max) = -1;
+        elseif i == i_max % no pressure gradient - B4
+            A(idx, idx-j_max) = -1;
+        end
+    end
+end
+
 % %%%%%%%% ITERATIVE SOLVING %%%%%%%%
-dt = 0;
 for itr = 1:max_iter
     % calculate dt per cell
     for i = 2:i_max-1
@@ -172,10 +196,6 @@ for itr = 1:max_iter
 
     % reshape solution into correct dimensions
     p_corr = reshape(p_corr_tmp, i_max, j_max);
-    p_corr(:, 1) = p_corr(:, 2); % no pressure gradient - B1
-    p_corr(1, :) = p_corr(2, :); % no pressure gradient - B2
-    p_corr(:, j_max) = p_corr(:, j_max - 1); % no pressure gradient - B3
-    p_corr(i_max, :) = p_corr(i_max - 1, :); % no pressure gradient - B4
 
     % %%%%%%%% CORRECTION %%%%%%%%
     for i = 2:i_max-1
@@ -219,21 +239,26 @@ for itr = 1:max_iter
     u_n(:, 1) = - u_n(:, 2); % wall
     v_n(:, 1) = 0; % wall
     T_n(:, 1) = T_n(:, 2); % adiabat
+    %p_n(:, 1) = p_n(:, 2); % no pressure gradient
 
     % Boundary 2 - inner radius
     u_n(1, :) = 0; % wall
     v_n(1, :) = 2 * v_wall - v_n(2, :); % wall
     T_n(1, :) = 2 * T_c - T_n(2, :); % wall with temperature
+    %p_n(1, :) = p_n(2, :); % no pressure gradient
 
     % Boundary 3 - adiabat right
     u_n(:, j_max) = - u_n(:, j_max - 1); % wall
     v_n(:, j_max) = 0; % wall
     T_n(:, j_max) = T_n(:, j_max - 1); % adiabat
+    %p_n(:, j_max) = p_n(:, j_max - 1); % no pressure gradient
 
     % Boundary 4 - outer radius
     u_n(i_max, :) = 0; % wall
     v_n(i_max, :) = - v_n(i_max - 1, :); % wall
     T_n(i_max, :) = 2 * T_h - T_n(i_max - 1, :); % wall with temperature
+    %p_n(i_max, :) = p_n(i_max - 1, :); % no pressure gradient
+
     if mod(itr, 10) == 0
         fprintf('iter: %i\n', itr)
     end
