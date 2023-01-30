@@ -234,10 +234,14 @@ for itr = 1:max_iter
     u_n(i_max, :) = 0; % wall
     v_n(i_max, :) = - v_n(i_max - 1, :); % wall
     T_n(i_max, :) = 2 * T_h - T_n(i_max - 1, :); % wall with temperature
+    if mod(itr, 10) == 0
+        fprintf('iter: %i\n', itr)
+    end
 end
 
 fprintf('completed\n')
 
+% %%%%%%%% PLOTS %%%%%%%%
 figure
 n_plot = 100;
 phi_plot = linspace(Phi_start, Phi_end, n_plot);
@@ -265,6 +269,25 @@ figure
 contourf(X,Y,T_n,100,'LineColor','none');
 colorbar;
 colormap('jet');
+
+hold on;
+n_plot = 100;
+phi_plot = linspace(Phi_start, Phi_end, n_plot);
+x_plot = zeros(2*n_plot+1,1);
+x_plot(1:n_plot) = R_i * cos(phi_plot);
+x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+x_plot(2*n_plot+1) = x_plot(1);
+y_plot = zeros(2*n_plot+1,1);
+y_plot(1:n_plot) = R_i * sin(phi_plot);
+y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+y_plot(2*n_plot+1) = y_plot(1);
+plot(x_plot, y_plot, 'k');
+axis equal;
+
+figure
+contourf(X,Y,p_n,100,'LineColor','none');
+colorbar;
+colormap('cool');
 
 hold on;
 n_plot = 100;
