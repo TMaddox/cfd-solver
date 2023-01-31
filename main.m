@@ -234,30 +234,11 @@ for itr = 1:max_iter
     p_n = p_np1;
     T_n = T_np1;
 
-    % %%%%%%%% BOUNDARIES %%%%%%%%
-    % Boundary 1 - adiabat left
-    u_n(:, 1) = - u_n(:, 2); % wall
-    v_n(:, 1) = 0; % wall
-    T_n(:, 1) = T_n(:, 2); % adiabat
-    %p_n(:, 1) = p_n(:, 2); % no pressure gradient
-
-    % Boundary 2 - inner radius
-    u_n(1, :) = 0; % wall
-    v_n(1, :) = 2 * v_wall - v_n(2, :); % wall
-    T_n(1, :) = 2 * T_c - T_n(2, :); % wall with temperature
-    %p_n(1, :) = p_n(2, :); % no pressure gradient
-
-    % Boundary 3 - adiabat right
-    u_n(:, j_max) = - u_n(:, j_max - 1); % wall
-    v_n(:, j_max) = 0; % wall
-    T_n(:, j_max) = T_n(:, j_max - 1); % adiabat
-    %p_n(:, j_max) = p_n(:, j_max - 1); % no pressure gradient
-
-    % Boundary 4 - outer radius
-    u_n(i_max, :) = 0; % wall
-    v_n(i_max, :) = - v_n(i_max - 1, :); % wall
-    T_n(i_max, :) = 2 * T_h - T_n(i_max - 1, :); % wall with temperature
-    %p_n(i_max, :) = p_n(i_max - 1, :); % no pressure gradient
+    % apply boundaries
+    u_n = apply_u_boundary(u_n, i_max, j_max);
+    v_n = apply_v_boundary(v_n, i_max, j_max, v_wall);
+    T_n = apply_T_boundary(T_n, i_max, j_max, T_c, T_h);
+    p_n = apply_p_boundary(p_n, i_max, j_max);
 
     if mod(itr, 10) == 0
         fprintf('iter: %i\n', itr)
@@ -327,3 +308,37 @@ y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
 y_plot(2*n_plot+1) = y_plot(1);
 plot(x_plot, y_plot, 'k');
 axis equal;
+
+
+% %%%%%%%% BOUNDARIES %%%%%%%%
+% Boundary 1 - adiabat left
+% Boundary 2 - inner radius
+% Boundary 3 - adiabat right
+% Boundary 4 - outer radius
+function u = apply_u_boundary(u, i_max, j_max)
+    u(2:i_max-1, 1) = - u(2:i_max-1, 2); % B1
+    u(1, 2:j_max-1) = 0; % B2
+    u(2:i_max-1, j_max) = - u(2:i_max-1, j_max - 1); % B3
+    u(i_max, 2:j_max-1) = 0; % B4
+end
+
+function v = apply_v_boundary(v, i_max, j_max, v_wall)
+    v(2:i_max-1, 1) = 0; % B1
+    v(1, 2:j_max-1) = 2 * v_wall - v(2, 2:j_max-1); % B2
+    v(2:i_max-1, j_max) = 0; % B3
+    v(i_max, 2:j_max-1) = - v(i_max - 1, 2:j_max-1); % B4
+end
+
+function T = apply_T_boundary(T, i_max, j_max, T_c, T_h)
+    T(2:i_max-1, 1) = T(2:i_max-1, 2); % B1
+    T(1, 2:j_max-1) = 2 * T_c - T(2, 2:j_max-1); % B2
+    T(2:i_max-1, j_max) = T(2:i_max-1, j_max - 1); % B3
+    T(i_max, 2:j_max-1) = 2 * T_h - T(i_max - 1, 2:j_max-1); % B4
+end
+
+function p = apply_p_boundary(p, i_max, j_max)
+    p(2:i_max-1, 1) = p(2:i_max-1, 2); % B1
+    p(1, 2:j_max-1) = p(2, 2:j_max-1); % B2
+    p(2:i_max-1, j_max) = p(2:i_max-1, j_max - 1); % B3
+    p(i_max, 2:j_max-1) = p(i_max - 1, 2:j_max-1); % B4
+end
