@@ -3,14 +3,14 @@ fprintf('start\n')
 
 % solver settings
 max_iter = 100;
-CFL = 0.8;
+CFL = 0.9;
 N_i = 10; % number of nodes in R direction
 N_j = 10; % number of nodes in Phi direction
-GS_max_iter = 100;
+GS_max_iter = 1000;
 GS_tol = 1e-6;
 
 % settings
-U0 = 10;
+U0 = 1;
 T_h_absolut = 400;
 T_c_absolut = 300;
 R = 1;
@@ -43,14 +43,17 @@ phiv = linspace(Phi_start, Phi_end + dphi, j_max);
 R_coord = transpose(R_coord);
 Phi_coord = transpose(Phi_coord);
 
+% small functions
+avg = @(a, b) (a+b)/2;
+
 % define variables
 dt = zeros(i_max, j_max);
 
 % n + 1 timestep
-u_np1 = zeros(i_max, j_max);
-v_np1 = zeros(i_max, j_max);
-p_np1 = zeros(i_max, j_max);
-T_np1 = zeros(i_max, j_max);
+u_np1 = NaN(i_max, j_max);
+v_np1 = NaN(i_max, j_max);
+p_np1 = NaN(i_max, j_max);
+T_np1 = NaN(i_max, j_max);
 
 % current timestep
 u_n = zeros(i_max, j_max);
@@ -92,7 +95,7 @@ end
 for i = 2:i_max-1
     for j = 1:j_max
         idx = j + (i-1) * j_max;
-        if j == 1 % no pressure gradient - B1
+        if j == 1 && i ~= 2 % no pressure gradient - B1
             A(idx, idx+1) = -1;
         elseif j == j_max % no pressure gradient - B3
             A(idx, idx-1) = -1;
@@ -123,37 +126,38 @@ for itr = 1:max_iter
     for i = 2:i_max-1
         for j = 2:j_max-1
             % RHS for r-impulse
-            i_t1 = (rp(i+1) * ((u_n(i+1,j) + u_n(i,j))/2)^2 ...
-                - rp(i) * ((u_n(i,j) + u_n(i-1,j))/2)^2) * dphi;
-            i_t2 = ((u_n(i,j+1) + u_n(i,j))/2 * (v_n(i+1,j) + v_n(i,j))/2 ...
-                - (u_n(i,j) + u_n(i,j-1))/2 * (v_n(i+1,j-1) + v_n(i,j-1))/2) * dr;
+            i_t1 = (rp(i+1) * avg(u_n(i+1,j), u_n(i,j))^2 ...
+                - rp(i) * avg(u_n(i,j), u_n(i-1,j))^2) * dphi;
+            i_t2 = (avg(u_n(i,j+1), u_n(i,j)) * avg(v_n(i+1,j), v_n(i,j)) ...
+                - avg(u_n(i,j), u_n(i,j-1)) * avg(v_n(i+1,j-1), v_n(i,j-1))) * dr;
             i_t3 = ((v_n(i,j) + v_n(i+1,j) + v_n(i+1,j-1) + v_n(i,j-1))/4)^2 * dr * dphi;
             i_t4 = (p_n(i+1,j) - p_n(i,j)) * ru(i) * dphi;
             i_t5 = 2/Re * (rp(i+1) * (u_n(i+1,j) - u_n(i,j))/dr ...
                 - rp(i) * (u_n(i,j) - u_n(i-1,j))/dr) * dphi;
             i_t6 = 1/Re * (ru(i) * (v_n(i+1,j)/rp(i+1) - v_n(i,j)/rp(i))/dr ...
                 - ru(i) * (v_n(i+1,j-1)/rp(i+1) - v_n(i,j-1)/rp(i))/dr ...
-                + (u_n(i,j+1) - u_n(i,j))/(ru(i)*dphi) ...
-                - (u_n(i,j) - u_n(i,j-1))/(ru(i)*dphi)) * dr;
-            i_t7 = 2/(Re*ru(i)) * (((v_n(i+1,j) + v_n(i,j))/2 - (v_n(i+1,j-1) + v_n(i,j-1))/2) / dphi ...
+                + (u_n(i,j+1) - u_n(i,j)) / (ru(i)*dphi) ...
+                - (u_n(i,j) - u_n(i,j-1)) / (ru(i)*dphi)) * dr;
+            i_t7 = 2/(Re*ru(i)) * ...
+                ((avg(v_n(i+1,j), v_n(i,j)) - avg(v_n(i+1,j-1), v_n(i,j-1))) / dphi ...
                 + u_n(i,j)) * dr * dphi;
             Fi_n(i,j) = - i_t1 - i_t2 + i_t3 - i_t4 + i_t5 + i_t6 - i_t7;  
 
             % RHS for phi-impulse
-            j_t1 = (ru(i) * (u_n(i,j+1) + u_n(i,j))/2 * (v_n(i+1,j) + v_n(i,j))/2 ...
-                - ru(i-1) * (u_n(i-1,j+1) + u_n(i-1,j))/2 * (v_n(i,j) + v_n(i-1,j))/2) * dphi;
-            j_t2 = (((v_n(i,j+1) + v_n(i,j))/2)^2 ...
-                - ((v_n(i,j) + v_n(i,j-1))/2)^2) * dr;
+            j_t1 = (ru(i) * avg(u_n(i,j+1), u_n(i,j)) * avg(v_n(i+1,j), v_n(i,j)) ...
+                - ru(i-1) * avg(u_n(i-1,j+1), u_n(i-1,j)) * avg(v_n(i,j), v_n(i-1,j))) * dphi;
+            j_t2 = (avg(v_n(i,j+1), v_n(i,j))^2 ...
+                - avg(v_n(i,j), v_n(i,j-1))^2) * dr;
             j_t3 = ((u_n(i,j) + u_n(i,j+1) + u_n(i-1,j) + u_n(i-1,j+1))/4) * v_n(i,j) * dr * dphi;
             j_t4 = (p_n(i,j+1) - p_n(i,j)) * dr;
             j_t5 = 1/(Re * rp(i)) * (ru(i)^3 * (v_n(i+1,j)/rp(i+1) - v_n(i,j)/rp(i))/dr ...
                 - ru(i-1)^3 * (v_n(i,j)/rp(i) - v_n(i-1,j)/rp(i-1))/dr ...
                 + ru(i) * (u_n(i,j+1) - u_n(i,j))/dphi ...
-                - ru(i-1) * (u_n(i,j) - u_n(i,j-1))/dphi) * dphi;
+                - ru(i-1) * (u_n(i-1,j+1) - u_n(i-1,j))/dphi) * dphi;
             j_t6 = 2/(Re * rp(i)) * ((v_n(i,j+1) - v_n(i,j))/dphi ...
                 - (v_n(i,j) - v_n(i,j-1))/dphi ...
-                + (u_n(i,j+1) + u_n(i-1,j+1))/2 ...
-                - (u_n(i,j) + u_n(i-1,j))/2) * dr;
+                + avg(u_n(i,j+1), u_n(i-1,j+1)) ...
+                - avg(u_n(i,j), u_n(i-1,j))) * dr;
             Fj_n(i,j) = - j_t1 - j_t2 - j_t3 - j_t4 + j_t5 + j_t6;
 
             % projection
@@ -174,25 +178,26 @@ for itr = 1:max_iter
     end
 
     % gauss seidl solver for solving the A*x=b Eq. system
-    x = p_corr_tmp;
-    for k = 1:GS_max_iter
-        err = 0;
-        for idx = 1:i_max*j_max
-            sum = 0;
-            for jdx = 1:i_max*j_max
-                if jdx ~= idx
-                    sum = sum + A(idx,jdx)*x(jdx);
-                end
-            end
-            x(idx) = (b(idx) - sum)/A(idx,idx);
-            err = max(err, abs(x(idx) - p_corr_tmp(idx)));
-        end
-
-        if err <= GS_tol
-            break;
-        end
-        p_corr_tmp = x;
-    end
+%     x = p_corr_tmp;
+%     for k = 1:GS_max_iter
+%         err = 0;
+%         for idx = 1:i_max*j_max
+%             sum = 0;
+%             for jdx = 1:i_max*j_max
+%                 if jdx ~= idx
+%                     sum = sum + A(idx,jdx) * x(jdx);
+%                 end
+%             end
+%             x(idx) = (b(idx) - sum)/A(idx,idx);
+%             err = max(err, abs(x(idx) - p_corr_tmp(idx)));
+%         end
+% 
+%         if err <= GS_tol
+%             break;
+%         end
+%         p_corr_tmp = x;
+%     end
+    p_corr_tmp = inv(A) * b;
 
     % reshape solution into correct dimensions
     p_corr = reshape(p_corr_tmp, i_max, j_max);
