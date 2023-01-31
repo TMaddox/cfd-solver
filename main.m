@@ -59,7 +59,7 @@ T_np1 = NaN(i_max, j_max);
 u_n = zeros(i_max, j_max);
 v_n = zeros(i_max, j_max);
 p_n = ones(i_max, j_max);
-T_n = ones(i_max, j_max);
+T_n = zeros(i_max, j_max);
 Fi_n = zeros(i_max, j_max);
 Fj_n = zeros(i_max, j_max);
 Fe_n = zeros(i_max, j_max);
@@ -67,16 +67,26 @@ Fe_n = zeros(i_max, j_max);
 % n - 1 timestep
 u_nm1 = zeros(i_max, j_max);
 v_nm1 = zeros(i_max, j_max);
-p_nm1 = ones(i_max, j_max);
-T_nm1 = ones(i_max, j_max);
+p_nm1 = zeros(i_max, j_max);
+T_nm1 = zeros(i_max, j_max);
 Fi_nm1 = zeros(i_max, j_max);
 Fj_nm1 = zeros(i_max, j_max);
 Fe_nm1 = zeros(i_max, j_max);
 
 % projection step
-u_star = zeros(i_max, j_max);
-v_star = zeros(i_max, j_max);
-p_corr = zeros(i_max, j_max);
+u_star = NaN(i_max, j_max);
+v_star = NaN(i_max, j_max);
+p_corr = NaN(i_max, j_max);
+
+% apply initial boundaries
+u_n = apply_u_boundary(u_n, i_max, j_max);
+v_n = apply_v_boundary(v_n, i_max, j_max, v_wall);
+T_n = apply_T_boundary(T_n, i_max, j_max, T_c, T_h);
+p_n = apply_p_boundary(p_n, i_max, j_max);
+u_nm1 = apply_u_boundary(u_nm1, i_max, j_max);
+v_nm1 = apply_v_boundary(v_nm1, i_max, j_max, v_wall);
+T_nm1 = apply_T_boundary(T_nm1, i_max, j_max, T_c, T_h);
+p_nm1 = apply_p_boundary(p_nm1, i_max, j_max);
 
 % static Eq. for poisson Eq.
 A = eye(i_max*j_max, i_max*j_max);
@@ -123,7 +133,7 @@ for itr = 1:max_iter
     end
 
     % %%%%%%%% PROJECTION %%%%%%%%
-    for i = 2:i_max-1
+    for i = 2:i_max-2
         for j = 2:j_max-1
             % RHS for r-impulse
             i_t1 = (rp(i+1) * avg(u_n(i+1,j), u_n(i,j))^2 ...
@@ -141,8 +151,14 @@ for itr = 1:max_iter
             i_t7 = 2/(Re*ru(i)) * ...
                 ((avg(v_n(i+1,j), v_n(i,j)) - avg(v_n(i+1,j-1), v_n(i,j-1))) / dphi ...
                 + u_n(i,j)) * dr * dphi;
-            Fi_n(i,j) = - i_t1 - i_t2 + i_t3 - i_t4 + i_t5 + i_t6 - i_t7;  
+            Fi_n(i,j) = - i_t1 - i_t2 + i_t3 - i_t4 + i_t5 + i_t6 - i_t7;
 
+            % projection
+            u_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fi_n(i,j) - 1/2 * Fi_nm1(i,j)) + u_n(i,j);
+        end
+    end
+    for i = 2:i_max-1
+        for j = 2:j_max-2
             % RHS for phi-impulse
             j_t1 = (ru(i) * avg(u_n(i,j+1), u_n(i,j)) * avg(v_n(i+1,j), v_n(i,j)) ...
                 - ru(i-1) * avg(u_n(i-1,j+1), u_n(i-1,j)) * avg(v_n(i,j), v_n(i-1,j))) * dphi;
@@ -161,10 +177,13 @@ for itr = 1:max_iter
             Fj_n(i,j) = - j_t1 - j_t2 - j_t3 - j_t4 + j_t5 + j_t6;
 
             % projection
-            u_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fi_n(i,j) - 1/2 * Fi_nm1(i,j)) + u_n(i,j);
             v_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
         end
     end
+
+    % apply boundaries
+    u_star = apply_u_boundary(u_star, i_max, j_max);
+    v_star = apply_v_boundary(v_star, i_max, j_max, v_wall);
 
     % %%%%%%%% POISSON %%%%%%%%
     p_corr_tmp = zeros(i_max*j_max, 1);
@@ -200,7 +219,7 @@ for itr = 1:max_iter
     p_corr_tmp = inv(A) * b;
 
     % reshape solution into correct dimensions
-    p_corr = reshape(p_corr_tmp, i_max, j_max);
+    p_corr = reshape(p_corr_tmp, [j_max, i_max])';
 
     % %%%%%%%% CORRECTION %%%%%%%%
     for i = 2:i_max-1
@@ -215,13 +234,21 @@ for itr = 1:max_iter
             Fe_n(i,j) = - e_t1 - e_t2 + e_t3;
 
             T_np1(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fe_n(i,j) - 1/2 * Fe_nm1(i,j)) + T_n(i,j);
-
-            % correction
-            u_np1(i,j) = u_star(i,j) - dt(i,j)/dr * (p_corr(i+1,j) - p_corr(i,j));
-            v_np1(i,j) = v_star(i,j) - dt(i,j)/dphi * (p_corr(i,j+1) - p_corr(i,j));
-            p_np1(i,j) = p_n(i,j) + p_corr(i,j);
         end
     end
+    for i = 2:i_max-2
+        for j = 2:j_max-1
+            % correction
+            u_np1(i,j) = u_star(i,j) - dt(i,j)/dr * (p_corr(i+1,j) - p_corr(i,j));
+        end
+    end
+    for i = 2:i_max-1
+        for j = 2:j_max-2
+            % correction
+            v_np1(i,j) = v_star(i,j) - dt(i,j)/dphi * (p_corr(i,j+1) - p_corr(i,j));
+        end
+    end
+    p_np1 = p_n + p_corr;
 
     % %%%%%%%% STORE VALUES %%%%%%%%
     % copy values from timestep n to n-1 for next iter
@@ -321,17 +348,17 @@ axis equal;
 % Boundary 3 - adiabat right
 % Boundary 4 - outer radius
 function u = apply_u_boundary(u, i_max, j_max)
-    u(2:i_max-1, 1) = - u(2:i_max-1, 2); % B1
     u(1, 2:j_max-1) = 0; % B2
-    u(2:i_max-1, j_max) = - u(2:i_max-1, j_max - 1); % B3
-    u(i_max, 2:j_max-1) = 0; % B4
+    u(i_max-1, 2:j_max-1) = 0; % B4
+    u(2:i_max-2, 1) = - u(2:i_max-2, 2); % B1
+    u(2:i_max-2, j_max) = - u(2:i_max-2, j_max - 1); % B3
 end
 
 function v = apply_v_boundary(v, i_max, j_max, v_wall)
     v(2:i_max-1, 1) = 0; % B1
-    v(1, 2:j_max-1) = 2 * v_wall - v(2, 2:j_max-1); % B2
-    v(2:i_max-1, j_max) = 0; % B3
-    v(i_max, 2:j_max-1) = - v(i_max - 1, 2:j_max-1); % B4
+    v(2:i_max-1, j_max-1) = 0; % B3
+    v(1, 2:j_max-2) = 2 * v_wall - v(2, 2:j_max-2); % B2
+    v(i_max, 2:j_max-2) = - v(i_max - 1, 2:j_max-2); % B4
 end
 
 function T = apply_T_boundary(T, i_max, j_max, T_c, T_h)
