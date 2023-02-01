@@ -3,14 +3,15 @@ fprintf('start\n')
 
 % solver settings
 max_iter = 100;
-CFL = 0.9;
+CFL = 0.35;
 N_i = 10; % number of nodes in R direction
 N_j = 10; % number of nodes in Phi direction
 GS_max_iter = 1000;
 GS_tol = 1e-6;
+alpha = 1; % relaxation for velocity
+beta = 1; % relaxation for pressure
 
 % settings
-U0 = 1;
 T_h_absolut = 400;
 T_c_absolut = 300;
 R = 1;
@@ -20,7 +21,6 @@ Phi_start = pi;
 Phi_end = 2*pi;
 Re = 60;
 Pr = 4;
-nu = U0 * R / Re;
 
 % add ghost cells
 i_max = N_i + 2;
@@ -29,8 +29,10 @@ j_max = N_j + 2;
 T_h = (T_h_absolut - 300) / (400 - 300);
 T_c = (T_c_absolut - 300) / (400 - 300);
 % wall velocity
-omega = 2 * pi;
+omega = 2 * pi * 0.1;
 v_wall = omega * R_i;
+U0 = R/2 * omega;
+nu = U0 * R / Re;
 
 % grid
 dr = (R_a - R_i) / N_i;
@@ -44,7 +46,7 @@ R_coord = transpose(R_coord);
 Phi_coord = transpose(Phi_coord);
 
 % small functions
-avg = @(a, b) (a+b)/2;
+avg = @(a, b) (a+b)/2; % average between two values
 
 % define variables
 dt = zeros(i_max, j_max);
@@ -56,19 +58,19 @@ p_np1 = NaN(i_max, j_max);
 T_np1 = NaN(i_max, j_max);
 
 % current timestep
-u_n = zeros(i_max, j_max);
-v_n = zeros(i_max, j_max);
-p_n = ones(i_max, j_max);
-T_n = zeros(i_max, j_max);
+u_n = ones(i_max, j_max) * 0;
+v_n = ones(i_max, j_max) * 0;
+p_n = ones(i_max, j_max) * 0;
+T_n = ones(i_max, j_max) * 0.5;
 Fi_n = zeros(i_max, j_max);
 Fj_n = zeros(i_max, j_max);
 Fe_n = zeros(i_max, j_max);
 
 % n - 1 timestep
-u_nm1 = zeros(i_max, j_max);
-v_nm1 = zeros(i_max, j_max);
-p_nm1 = zeros(i_max, j_max);
-T_nm1 = zeros(i_max, j_max);
+u_nm1 = ones(i_max, j_max) * 0;
+v_nm1 = ones(i_max, j_max) * 0;
+p_nm1 = ones(i_max, j_max) * 0;
+T_nm1 = ones(i_max, j_max) * 0.5;
 Fi_nm1 = zeros(i_max, j_max);
 Fj_nm1 = zeros(i_max, j_max);
 Fe_nm1 = zeros(i_max, j_max);
@@ -125,10 +127,105 @@ end
 
 % %%%%%%%% ITERATIVE SOLVING %%%%%%%%
 for itr = 1:max_iter
+    if mod(itr, 1) == 0
+        fprintf('start iter: %i\n', itr)
+
+        % %%%%%%%% PLOTS %%%%%%%%
+        % velocity
+        figure(1)
+        n_plot = 100;
+        phi_plot = linspace(Phi_start, Phi_end, n_plot);
+        x_plot = zeros(2*n_plot+1,1);
+        x_plot(1:n_plot) = R_i * cos(phi_plot);
+        x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+        x_plot(2*n_plot+1) = x_plot(1);
+        y_plot = zeros(2*n_plot+1,1);
+        y_plot(1:n_plot) = R_i * sin(phi_plot);
+        y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+        y_plot(2*n_plot+1) = y_plot(1);
+        plot(x_plot, y_plot, 'k');
+        
+        hold on;
+        % combined
+%         X = R_coord .* cos(Phi_coord);
+%         Y = R_coord .* sin(Phi_coord);
+%         u_x = u_n .* cos(Phi_coord);
+%         u_y = u_n .* sin(Phi_coord);
+%         v_x = -v_n .* sin(Phi_coord);
+%         v_y = v_n .* cos(Phi_coord);
+%         quiver(X, Y, u_x + v_x, u_y + v_y);
+
+        % u
+        X = (R_coord + dr/2) .* cos(Phi_coord);
+        Y = (R_coord + dr/2) .* sin(Phi_coord);
+        u_x = u_n .* cos(Phi_coord);
+        u_y = u_n .* sin(Phi_coord);
+        quiver(X, Y, u_x, u_y);
+
+        % v
+        X = R_coord .* cos(Phi_coord + dphi/2);
+        Y = R_coord .* sin(Phi_coord + dphi/2);
+        v_x = -v_n .* sin(Phi_coord + dphi/2);
+        v_y = v_n .* cos(Phi_coord + dphi/2);
+        quiver(X, Y, v_x, v_y);
+        hold off;
+        axis equal;
+        
+        % temperature
+        figure(2)
+        X = R_coord .* cos(Phi_coord);
+        Y = R_coord .* sin(Phi_coord);
+        contourf(X,Y,T_n,100,'LineColor','none');
+        colorbar;
+        colormap('jet');
+        
+        hold on;
+        n_plot = 100;
+        phi_plot = linspace(Phi_start, Phi_end, n_plot);
+        x_plot = zeros(2*n_plot+1,1);
+        x_plot(1:n_plot) = R_i * cos(phi_plot);
+        x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+        x_plot(2*n_plot+1) = x_plot(1);
+        y_plot = zeros(2*n_plot+1,1);
+        y_plot(1:n_plot) = R_i * sin(phi_plot);
+        y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+        y_plot(2*n_plot+1) = y_plot(1);
+        plot(x_plot, y_plot, 'k');
+        hold off;
+        axis equal;
+        
+        % pressure
+        figure(3)
+        X = R_coord .* cos(Phi_coord);
+        Y = R_coord .* sin(Phi_coord);
+        contourf(X,Y,p_n,100,'LineColor','none');
+        colorbar;
+        colormap('cool');
+        
+        hold on;
+        n_plot = 100;
+        phi_plot = linspace(Phi_start, Phi_end, n_plot);
+        x_plot = zeros(2*n_plot+1,1);
+        x_plot(1:n_plot) = R_i * cos(phi_plot);
+        x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+        x_plot(2*n_plot+1) = x_plot(1);
+        y_plot = zeros(2*n_plot+1,1);
+        y_plot(1:n_plot) = R_i * sin(phi_plot);
+        y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+        y_plot(2*n_plot+1) = y_plot(1);
+        plot(x_plot, y_plot, 'k');
+        hold off;
+        axis equal;
+
+        drawnow;
+    end
+
     % calculate dt per cell
     for i = 2:i_max-1
         for j = 2:j_max-1
-            dt(i,j) = CFL/(abs(u_n(i,j))/dr + abs(v_n(i,j))/(dphi*rp(i)) + 2*nu/dr^2 + 2*nu/(dphi*rp(i))^2);
+            dt(i,j) = 1e-3;
+            %dt(i,j) = CFL/(abs(u_n(i,j))/dr + abs(v_n(i,j))/(dphi*rp(i)) + 2*nu/dr^2 + 2*nu/(dphi*rp(i))^2);
+            %dt(2:i_max-1, 2:j_max-1) = max(dt(2:i_max-1, 2:j_max-1), 0.1);
         end
     end
 
@@ -197,29 +294,15 @@ for itr = 1:max_iter
     end
 
     % gauss seidl solver for solving the A*x=b Eq. system
-%     x = p_corr_tmp;
-%     for k = 1:GS_max_iter
-%         err = 0;
-%         for idx = 1:i_max*j_max
-%             sum = 0;
-%             for jdx = 1:i_max*j_max
-%                 if jdx ~= idx
-%                     sum = sum + A(idx,jdx) * x(jdx);
-%                 end
-%             end
-%             x(idx) = (b(idx) - sum)/A(idx,idx);
-%             err = max(err, abs(x(idx) - p_corr_tmp(idx)));
-%         end
-% 
-%         if err <= GS_tol
-%             break;
-%         end
-%         p_corr_tmp = x;
-%     end
-    p_corr_tmp = inv(A) * b;
+    %p_corr_tmp = GS(A, b, p_corr_tmp, i_max, j_max, GS_max_iter, GS_tol);
+    p_corr_tmp = A \ b;
 
     % reshape solution into correct dimensions
     p_corr = reshape(p_corr_tmp, [j_max, i_max])';
+    p_corr(1, 1) = nan;
+    p_corr(i_max, 1) = nan;
+    p_corr(1, j_max) = nan;
+    p_corr(i_max, j_max) = nan;
 
     % %%%%%%%% CORRECTION %%%%%%%%
     for i = 2:i_max-1
@@ -239,16 +322,16 @@ for itr = 1:max_iter
     for i = 2:i_max-2
         for j = 2:j_max-1
             % correction
-            u_np1(i,j) = u_star(i,j) - dt(i,j)/dr * (p_corr(i+1,j) - p_corr(i,j));
+            u_np1(i,j) = u_star(i,j) - dt(i,j)/dr * (p_corr(i+1,j) - p_corr(i,j)) * alpha;
         end
     end
     for i = 2:i_max-1
         for j = 2:j_max-2
             % correction
-            v_np1(i,j) = v_star(i,j) - dt(i,j)/dphi * (p_corr(i,j+1) - p_corr(i,j));
+            v_np1(i,j) = v_star(i,j) - dt(i,j)/(dphi * rp(i)) * (p_corr(i,j+1) - p_corr(i,j)) * alpha;
         end
     end
-    p_np1 = p_n + p_corr;
+    p_np1 = p_n + p_corr * beta;
 
     % %%%%%%%% STORE VALUES %%%%%%%%
     % copy values from timestep n to n-1 for next iter
@@ -271,75 +354,9 @@ for itr = 1:max_iter
     v_n = apply_v_boundary(v_n, i_max, j_max, v_wall);
     T_n = apply_T_boundary(T_n, i_max, j_max, T_c, T_h);
     p_n = apply_p_boundary(p_n, i_max, j_max);
-
-    if mod(itr, 10) == 0
-        fprintf('iter: %i\n', itr)
-    end
 end
 
 fprintf('completed\n')
-
-% %%%%%%%% PLOTS %%%%%%%%
-figure
-n_plot = 100;
-phi_plot = linspace(Phi_start, Phi_end, n_plot);
-x_plot = zeros(2*n_plot+1,1);
-x_plot(1:n_plot) = R_i * cos(phi_plot);
-x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
-x_plot(2*n_plot+1) = x_plot(1);
-y_plot = zeros(2*n_plot+1,1);
-y_plot(1:n_plot) = R_i * sin(phi_plot);
-y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
-y_plot(2*n_plot+1) = y_plot(1);
-plot(x_plot, y_plot, 'k');
-
-hold on;
-X = R_coord .* cos(Phi_coord);
-Y = R_coord .* sin(Phi_coord);
-u_x = u_n .* cos(Phi_coord);
-u_y = u_n .* sin(Phi_coord);
-v_x = -v_n .* sin(Phi_coord);
-v_y = v_n .* cos(Phi_coord);
-quiver(X, Y, u_x + v_x, u_y + v_y);
-axis equal;
-
-figure
-contourf(X,Y,T_n,100,'LineColor','none');
-colorbar;
-colormap('jet');
-
-hold on;
-n_plot = 100;
-phi_plot = linspace(Phi_start, Phi_end, n_plot);
-x_plot = zeros(2*n_plot+1,1);
-x_plot(1:n_plot) = R_i * cos(phi_plot);
-x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
-x_plot(2*n_plot+1) = x_plot(1);
-y_plot = zeros(2*n_plot+1,1);
-y_plot(1:n_plot) = R_i * sin(phi_plot);
-y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
-y_plot(2*n_plot+1) = y_plot(1);
-plot(x_plot, y_plot, 'k');
-axis equal;
-
-figure
-contourf(X,Y,p_n,100,'LineColor','none');
-colorbar;
-colormap('cool');
-
-hold on;
-n_plot = 100;
-phi_plot = linspace(Phi_start, Phi_end, n_plot);
-x_plot = zeros(2*n_plot+1,1);
-x_plot(1:n_plot) = R_i * cos(phi_plot);
-x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
-x_plot(2*n_plot+1) = x_plot(1);
-y_plot = zeros(2*n_plot+1,1);
-y_plot(1:n_plot) = R_i * sin(phi_plot);
-y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
-y_plot(2*n_plot+1) = y_plot(1);
-plot(x_plot, y_plot, 'k');
-axis equal;
 
 
 % %%%%%%%% BOUNDARIES %%%%%%%%
@@ -373,4 +390,28 @@ function p = apply_p_boundary(p, i_max, j_max)
     p(1, 2:j_max-1) = p(2, 2:j_max-1); % B2
     p(2:i_max-1, j_max) = p(2:i_max-1, j_max - 1); % B3
     p(i_max, 2:j_max-1) = p(i_max - 1, 2:j_max-1); % B4
+end
+
+function x = GS(A, b, x_init, i_max, j_max, max_iter, tol)
+    % gauss seidl solver for solving the A*x=b Eq. system
+    tmp = x_init;
+    x = x_init;
+    for k = 1:max_iter
+        err = 0;
+        for idx = 1:i_max*j_max
+            sum = 0;
+            for jdx = 1:i_max*j_max
+                if jdx ~= idx
+                    sum = sum + A(idx,jdx) * tmp(jdx);
+                end
+            end
+            tmp(idx) = (b(idx) - sum)/A(idx,idx);
+            err = max(err, abs(tmp(idx) - x_init(idx)));
+        end
+
+        if err <= tol
+            break;
+        end
+        x = tmp;
+    end
 end
