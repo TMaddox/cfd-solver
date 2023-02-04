@@ -29,7 +29,7 @@ j_max = N_j + 2;
 T_h = (T_h_absolut - 300) / (400 - 300);
 T_c = (T_c_absolut - 300) / (400 - 300);
 % wall velocity
-omega = 2 * pi * 0.1;
+omega = 2 * pi * 0.01;
 v_wall = omega * R_i;
 U0 = R/2 * omega;
 nu = U0 * R / Re;
@@ -94,12 +94,14 @@ p_nm1 = apply_p_boundary(p_nm1, i_max, j_max);
 A = eye(i_max*j_max, i_max*j_max);
 for i = 2:i_max-1
     for j = 2:j_max-1
-        idx = j + (i-1) * j_max;
-        A(idx, idx) = - ru(i)*dphi/dr - ru(i-1)*dphi/dr - 2 * dr/(rp(i)*dphi);
-        A(idx, idx+1) = ru(i)*dphi/dr;
-        A(idx, idx-1) = ru(i-1)*dphi/dr;
-        A(idx, idx+j_max) = dr/(rp(i)*dphi);
-        A(idx, idx-j_max) = dr/(rp(i)*dphi);
+        if i ~= 5 || j ~= 5
+            idx = j + (i-1) * j_max;
+            A(idx, idx) = - ru(i)*dphi/dr - ru(i-1)*dphi/dr - 2 * dr/(rp(i)*dphi);
+            A(idx, idx+1) = ru(i)*dphi/dr;
+            A(idx, idx-1) = ru(i-1)*dphi/dr;
+            A(idx, idx+j_max) = dr/(rp(i)*dphi);
+            A(idx, idx-j_max) = dr/(rp(i)*dphi);
+        end
     end
 end
 
@@ -107,7 +109,7 @@ end
 for i = 2:i_max-1
     for j = 1:j_max
         idx = j + (i-1) * j_max;
-        if j == 1 && i ~= 2 % no pressure gradient - B1
+        if j == 1 %&& i ~= 2 % no pressure gradient - B1
             A(idx, idx+1) = -1;
         elseif j == j_max % no pressure gradient - B3
             A(idx, idx-1) = -1;
@@ -274,7 +276,7 @@ for itr = 1:max_iter
             Fj_n(i,j) = - j_t1 - j_t2 - j_t3 - j_t4 + j_t5 + j_t6;
 
             % projection
-            v_star(i,j) = dt(i,j)/(dr*dphi*ru(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
+            v_star(i,j) = dt(i,j)/(dr*dphi*rp(i)) * (3/2 * Fj_n(i,j) - 1/2 * Fj_nm1(i,j)) + v_n(i,j);
         end
     end
 
@@ -303,15 +305,16 @@ for itr = 1:max_iter
     p_corr(i_max, 1) = nan;
     p_corr(1, j_max) = nan;
     p_corr(i_max, j_max) = nan;
-
+    % p_corr(2,1) = p_corr(2,2); % correct setting of value in A matrix
+ 
     % %%%%%%%% CORRECTION %%%%%%%%
     for i = 2:i_max-1
         for j = 2:j_max-1
             % RHS for energy
-            e_t1 = dphi * (rp(i) * u_n(i,j) * (T_n(i+1,j) + T_n(i,j))/2 ...
-                - rp(i-1) * u_n(i-1,j) * (T_n(i,j) + T_n(i-1,j))/2);
-            e_t2 = dr * (v_n(i,j) * (T_n(i,j+1) + T_n(i,j))/2 ...
-                - v_n(i,j-1) * (T_n(i,j) + T_n(i,j-1))/2);
+            e_t1 = dphi * (rp(i) * u_n(i,j) * avg(T_n(i+1,j), T_n(i,j)) ...
+                - rp(i-1) * u_n(i-1,j) * avg(T_n(i,j), T_n(i-1,j)));
+            e_t2 = dr * (v_n(i,j) * avg(T_n(i,j+1), T_n(i,j)) ...
+                - v_n(i,j-1) * avg(T_n(i,j), T_n(i,j-1)));
             e_t3 = 1/(Pr*Re) * ((ru(i) * (T_n(i+1,j)-T_n(i,j))/dr - ru(i-1) * (T_n(i,j)-T_n(i-1,j))/dr) * dphi ...
                 + dr/rp(i) * ((T_n(i,j+1) - T_n(i,j))/dphi - (T_n(i,j) - T_n(i,j-1))/dphi));
             Fe_n(i,j) = - e_t1 - e_t2 + e_t3;
@@ -354,6 +357,15 @@ for itr = 1:max_iter
     v_n = apply_v_boundary(v_n, i_max, j_max, v_wall);
     T_n = apply_T_boundary(T_n, i_max, j_max, T_c, T_h);
     p_n = apply_p_boundary(p_n, i_max, j_max);
+
+    % %%%%%%%% check conti %%%%%%%%
+    conti = NaN(i_max, j_max);
+    for i = 2:i_max-1
+        for j = 2:j_max-1
+            conti(i, j) = ((ru(i) * u_n(i,j) - ru(i-1) * u_n(i-1,j)) * dphi ...
+                + (v_n(i,j) - v_n(i,j-1)) * dr) / dt(i,j);
+        end
+    end
 end
 
 fprintf('completed\n')
