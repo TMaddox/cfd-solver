@@ -379,7 +379,7 @@ fprintf('completed\n')
 % %%%%%%%% calculate Nusselt number %%%%%%%%
 Nu = 0;
 for j = 2:j_max-1
-    Nu = (T_n(i_max,j) - T_n(i_max-1,j))/dr * R * dphi; 
+    Nu = Nu + (T_n(i_max,j) - T_n(i_max-1,j))/dr * R * dphi; 
 end
 fprintf('Nu: %i\n', Nu)
 
