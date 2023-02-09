@@ -2,9 +2,9 @@ clc; clearvars; close all;
 fprintf('start\n')
 
 % solver settings
-max_iter = 100000;
+max_iter = 10000;
 CFL = 0.1;
-N_i = 10; % number of nodes in R direction
+N_i = 15; % number of nodes in R direction
 N_j = N_i * 4; % number of nodes in Phi direction
 alpha = 0.2; % relaxation for velocity
 beta = 0.2; % relaxation for pressure
@@ -47,7 +47,11 @@ Phi_coord = transpose(Phi_coord);
 % small functions
 avg = @(a, b) (a+b)/2; % average between two values
 
-% define variables
+% other variables
+fconti = NaN(max_iter, 1);
+fp_corr = NaN(max_iter, 1);
+
+% time difference per cell
 dt = NaN(i_max, j_max);
 
 % n + 1 timestep
@@ -128,7 +132,7 @@ end
 
 % %%%%%%%% ITERATIVE SOLVING %%%%%%%%
 for itr = 1:max_iter
-    if mod(itr, 100) == 0
+    if mod(itr, 100) == 0 || itr == 1
         fprintf('start iter: %i\n', itr)
 
         % %%%%%%%% PLOTS %%%%%%%%
@@ -176,7 +180,7 @@ for itr = 1:max_iter
         figure(2)
         X = R_coord .* cos(Phi_coord);
         Y = R_coord .* sin(Phi_coord);
-        contourf(X,Y,T_n,100,'LineColor','none');
+        contourf(X,Y,T_n,30,'LineColor','none');
         colorbar;
         colormap('jet');
         
@@ -217,6 +221,55 @@ for itr = 1:max_iter
         plot(x_plot, y_plot, 'k');
         hold off;
         axis equal;
+
+        if itr ~= 1
+            % streamline
+            figure(4)
+            clf(4)
+            X = R_coord .* cos(Phi_coord);
+            Y = R_coord .* sin(Phi_coord);
+            u_x = u_n .* cos(Phi_coord);
+            u_y = u_n .* sin(Phi_coord);
+            v_x = -v_n .* sin(Phi_coord);
+            v_y = v_n .* cos(Phi_coord);
+            vel_x = NaN(i_max,j_max);
+            vel_y = NaN(i_max,j_max);
+            vel_x(2:i_max-1, 2:j_max-1) = u_x(2:i_max-1, 2:j_max-1) + v_x(2:i_max-1, 2:j_max-1);
+            vel_y(2:i_max-1, 2:j_max-1) = u_y(2:i_max-1, 2:j_max-1) + v_y(2:i_max-1, 2:j_max-1);
+
+            num_x = 1000;
+            num_y = num_x/2;
+            [X_cart, Y_cart] = meshgrid(linspace(min(min(X)), max(max(X)), num_x), linspace(max(max(Y)), min(min(Y)), num_y));
+            vel_x_cart = griddata(X(:), Y(:), vel_x(:), X_cart(:), Y_cart(:));
+            vel_y_cart = griddata(X(:), Y(:), vel_y(:), X_cart(:), Y_cart(:));
+            vel_x_cart = reshape(vel_x_cart, num_y, num_x);
+            vel_y_cart = reshape(vel_y_cart, num_y, num_x);
+            streamslice(X_cart, Y_cart, vel_x_cart, vel_y_cart);
+
+            hold on;
+            n_plot = 100;
+            phi_plot = linspace(Phi_start, Phi_end, n_plot);
+            x_plot = zeros(2*n_plot+1,1);
+            x_plot(1:n_plot) = R_i * cos(phi_plot);
+            x_plot(n_plot+1:2*n_plot) = - R_a * cos(phi_plot);
+            x_plot(2*n_plot+1) = x_plot(1);
+            y_plot = zeros(2*n_plot+1,1);
+            y_plot(1:n_plot) = R_i * sin(phi_plot);
+            y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
+            y_plot(2*n_plot+1) = y_plot(1);
+            plot(x_plot, y_plot, 'k');
+            refreshdata
+            hold off;
+            axis equal;
+        end
+
+        % plot conti
+        figure(5)
+        plot(linspace(1,itr-1,itr-1), fconti(1:itr-1));
+
+        % plot conti
+        figure(6)
+        plot(linspace(1,itr-1,itr-1), fp_corr(1:itr-1));
 
         drawnow;
     end
@@ -369,6 +422,10 @@ for itr = 1:max_iter
     end
     fprintf('max(abs(conti)): %i\n', max(max(abs(conti))))
     %fprintf('max(abs(p_corr)): %i\n', max(max(abs(p_corr))))
+
+    % 
+    fconti(itr) = max(max(abs(conti)));
+    fp_corr(itr) = max(max(abs(p_corr)));
 end
 
 fprintf('\n--------------------\n')
