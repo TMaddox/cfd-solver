@@ -173,6 +173,9 @@ for itr = 1:max_iter
 %         v_x = -v_n .* sin(Phi_coord + dphi/2);
 %         v_y = v_n .* cos(Phi_coord + dphi/2);
 %         quiver(X, Y, v_x, v_y);
+        title("Velocity");
+        xlabel ('x');
+        ylabel('y');
         hold off;
         axis equal;
         
@@ -196,6 +199,9 @@ for itr = 1:max_iter
         y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
         y_plot(2*n_plot+1) = y_plot(1);
         plot(x_plot, y_plot, 'k');
+        title("Temperature");
+        xlabel ('x');
+        ylabel('y');
         hold off;
         axis equal;
         
@@ -219,6 +225,9 @@ for itr = 1:max_iter
         y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
         y_plot(2*n_plot+1) = y_plot(1);
         plot(x_plot, y_plot, 'k');
+        title("Pressure");
+        xlabel ('x');
+        ylabel('y');
         hold off;
         axis equal;
 
@@ -258,18 +267,26 @@ for itr = 1:max_iter
             y_plot(n_plot+1:2*n_plot) = R_a * sin(phi_plot);
             y_plot(2*n_plot+1) = y_plot(1);
             plot(x_plot, y_plot, 'k');
-            refreshdata
+            title("Streamlines");
+            xlabel ('x');
+            ylabel('y');
             hold off;
             axis equal;
         end
 
         % plot conti
         figure(5)
-        plot(linspace(1,itr-1,itr-1), fconti(1:itr-1));
+        semilogy(linspace(1,itr-1,itr-1), fconti(1:itr-1));
+        xlabel ('itr');
+        ylabel('max(abs(conti))');
+        title("max(abs(conti))(itr)");
 
         % plot conti
         figure(6)
-        plot(linspace(1,itr-1,itr-1), fp_corr(1:itr-1));
+        semilogy(linspace(1,itr-1,itr-1), fp_corr(1:itr-1));
+        xlabel ('itr');
+        ylabel('max(abs(p_corr))');
+        title("max(abs(p corr))(itr)");
 
         drawnow;
     end
