@@ -4,7 +4,7 @@ fprintf('start\n')
 % solver settings
 max_iter = 10000;       % max. # Iterationen
 CFL = 0.1;              % Courant-Friedrichs-Lewy Kriterium
-N_i = 15;               % # of nodes in R-Richtung
+N_i = 5;               % # of nodes in R-Richtung
 N_j = N_i * 4;          % # of nodes in Phi-Richtung
 alpha = 0.2;            % Relaxation für velocity
 beta = 0.2;             % Relaxation für pressure
@@ -20,6 +20,7 @@ Phi_start = pi;         % Startwinkel (lt. Angabe)
 Phi_end = 2*pi;         % Endwinkel (lt. Angabe)
 Re = 60;                % Reynolds Zahl (lt. Angabe)
 Pr = 4;                 % Prandtl Zahl (lt. Angabe)
+display_ghost_cells = false;    % specify if ghost cells should be displayed
 
 % add ghost cells
 i_max = N_i + 2;
@@ -41,8 +42,12 @@ dphi = (Phi_end - Phi_start) / N_j;                 % Grid size in phi-Richtung
 phip = linspace(Phi_start - dphi/2, Phi_end + dphi/2, j_max);   % linspace von allen phip's (Winkel aller Points)
 phiv = linspace(Phi_start, Phi_end + dphi, j_max);              % linspace von allen phiv's (Winkel aller Zellwände)
 [R_coord, Phi_coord] = meshgrid(linspace(R_i-dr/2, R_a+dr/2, i_max), linspace(Phi_start-dphi/2, Phi_end+dphi/2, j_max)); % Meshgrid aller Nodes (incl. ghost cells)
-R_coord = transpose(R_coord);                       % Korrektur
-Phi_coord = transpose(Phi_coord);                   % Korrektur
+R_coord_with_ghost = transpose(R_coord);                        % Korrektur
+Phi_coord_with_ghost = transpose(Phi_coord);                    % Korrektur
+if ~display_ghost_cells
+    R_coord = R_coord_with_ghost(2:end-1, 2:end-1);             % cut out Ghost cells
+    Phi_coord = Phi_coord_with_ghost(2:end-1, 2:end-1);         % cut out ghost cells
+end
 
 % small functions
 avg = @(a, b) (a+b)/2;          % average between two values
@@ -154,10 +159,17 @@ for itr = 1:max_iter
         % combined
         X = R_coord .* cos(Phi_coord);
         Y = R_coord .* sin(Phi_coord);
-        u_x = u_n .* cos(Phi_coord);
-        u_y = u_n .* sin(Phi_coord);
-        v_x = -v_n .* sin(Phi_coord);
-        v_y = v_n .* cos(Phi_coord);
+        if ~display_ghost_cells
+            u_x = u_n(2:end-1, 2:end-1) .* cos(Phi_coord);
+            u_y = u_n(2:end-1, 2:end-1) .* sin(Phi_coord);
+            v_x = -v_n(2:end-1, 2:end-1) .* sin(Phi_coord);
+            v_y = v_n(2:end-1, 2:end-1) .* cos(Phi_coord);
+        else
+            u_x = u_n .* cos(Phi_coord);
+            u_y = u_n .* sin(Phi_coord);
+            v_x = -v_n .* sin(Phi_coord);
+            v_y = v_n .* cos(Phi_coord);
+        end
         quiver(X, Y, u_x + v_x, u_y + v_y);
 
         % u
@@ -183,7 +195,11 @@ for itr = 1:max_iter
         figure(2)
         X = R_coord .* cos(Phi_coord);
         Y = R_coord .* sin(Phi_coord);
-        contourf(X,Y,T_n,30,'LineColor','none');
+        if ~display_ghost_cells
+            contourf(X,Y,T_n(2:end-1, 2:end-1),30,'LineColor','none');
+        else
+            contourf(X,Y,T_n,30,'LineColor','none');
+        end
         colorbar;
         colormap('jet');
         
@@ -209,7 +225,11 @@ for itr = 1:max_iter
         figure(3)
         X = R_coord .* cos(Phi_coord);
         Y = R_coord .* sin(Phi_coord);
-        contourf(X,Y,p_n,100,'LineColor','none');
+        if ~display_ghost_cells
+            contourf(X,Y,p_n(2:end-1, 2:end-1),100,'LineColor','none');
+        else
+            contourf(X,Y,p_n,30,'LineColor','none');
+        end
         colorbar;
         colormap('cool');
         
@@ -235,16 +255,23 @@ for itr = 1:max_iter
             % streamline
             figure(4)
             clf(4)
-            X = R_coord .* cos(Phi_coord);
-            Y = R_coord .* sin(Phi_coord);
-            u_x = u_n .* cos(Phi_coord);
-            u_y = u_n .* sin(Phi_coord);
-            v_x = -v_n .* sin(Phi_coord);
-            v_y = v_n .* cos(Phi_coord);
-            vel_x = NaN(i_max,j_max);
-            vel_y = NaN(i_max,j_max);
-            vel_x(2:i_max-1, 2:j_max-1) = u_x(2:i_max-1, 2:j_max-1) + v_x(2:i_max-1, 2:j_max-1);
-            vel_y(2:i_max-1, 2:j_max-1) = u_y(2:i_max-1, 2:j_max-1) + v_y(2:i_max-1, 2:j_max-1);
+            X = R_coord_with_ghost .* cos(Phi_coord_with_ghost);
+            Y = R_coord_with_ghost .* sin(Phi_coord_with_ghost);
+%             u_x = u_n .* cos(Phi_coord);
+%             u_y = u_n .* sin(Phi_coord);
+%             v_x = -v_n .* sin(Phi_coord);
+%             v_y = v_n .* cos(Phi_coord);
+            if ~display_ghost_cells
+                vel_x = NaN(i_max,j_max);
+                vel_y = NaN(i_max,j_max);
+                vel_x(2:i_max-1, 2:j_max-1) = u_x + v_x;
+                vel_y(2:i_max-1, 2:j_max-1) = u_y + v_y;
+            else
+                vel_x = NaN(i_max,j_max);
+                vel_y = NaN(i_max,j_max);
+                vel_x(2:i_max-1, 2:j_max-1) = u_x(2:i_max-1, 2:j_max-1) + v_x(2:i_max-1, 2:j_max-1);
+                vel_y(2:i_max-1, 2:j_max-1) = u_y(2:i_max-1, 2:j_max-1) + v_y(2:i_max-1, 2:j_max-1);
+            end
 
             num_x = 1000;
             num_y = num_x/2;
@@ -371,7 +398,6 @@ for itr = 1:max_iter
     % gauss seidl solver for solving the A*x=b Eq. system
     p_corr_tmp = zeros(i_max*j_max, 1);
     p_corr_tmp = GS(A, b, p_corr_tmp, GS_max_iter);
-    % p_corr_tmp = A \ b;
 
     % reshape solution into correct dimensions
     p_corr = reshape(p_corr_tmp, [j_max, i_max])';
