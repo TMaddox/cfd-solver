@@ -4,8 +4,8 @@ fprintf('start\n')
 % solver settings
 max_iter = 10000;       % max. # Iterationen
 CFL = 0.1;              % Courant-Friedrichs-Lewy Kriterium
-N_i = 5;               % # of nodes in R-Richtung
-N_j = N_i * 4;          % # of nodes in Phi-Richtung
+N_i = 15;               % # of nodes in R-Richtung
+N_j = 4 * N_i;          % # of nodes in Phi-Richtung
 alpha = 0.2;            % Relaxation für velocity
 beta = 0.2;             % Relaxation für pressure
 GS_max_iter = 100;      % max. # Iterationen für Gauss-Seidel solver
@@ -41,7 +41,7 @@ ru = linspace(R_i, R_a + dr, i_max);                % linspace von allen ru's (R
 dphi = (Phi_end - Phi_start) / N_j;                 % Grid size in phi-Richtung
 phip = linspace(Phi_start - dphi/2, Phi_end + dphi/2, j_max);   % linspace von allen phip's (Winkel aller Points)
 phiv = linspace(Phi_start, Phi_end + dphi, j_max);              % linspace von allen phiv's (Winkel aller Zellwände)
-[R_coord, Phi_coord] = meshgrid(linspace(R_i-dr/2, R_a+dr/2, i_max), linspace(Phi_start-dphi/2, Phi_end+dphi/2, j_max)); % Meshgrid aller Nodes (incl. ghost cells)
+[R_coord, Phi_coord] = meshgrid(linspace(R_i-dr, R_a+dr, i_max), linspace(Phi_start-dphi, Phi_end+dphi, j_max)); % Meshgrid aller Nodes (incl. ghost cells)
 R_coord_with_ghost = transpose(R_coord);                        % Korrektur
 Phi_coord_with_ghost = transpose(Phi_coord);                    % Korrektur
 if ~display_ghost_cells
@@ -170,7 +170,9 @@ for itr = 1:max_iter
             v_x = -v_n .* sin(Phi_coord);
             v_y = v_n .* cos(Phi_coord);
         end
-        quiver(X, Y, u_x + v_x, u_y + v_y);
+        plot_vel_x = u_x + v_x;
+        plot_vel_y = u_y + v_y;
+        quiver(X(1:2:end, 1:2:end), Y(1:2:end, 1:2:end), plot_vel_x(1:2:end, 1:2:end), plot_vel_y(1:2:end, 1:2:end), 'r', 'linewidth', 1);
 
         % u
 %         X = (R_coord + dr/2) .* cos(Phi_coord);
